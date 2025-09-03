@@ -2,7 +2,8 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { FFmpeg } from '@ffmpeg/ffmpeg';
-import { fetchFile, toBlobURL } from '@ffmpeg/util';
+import { toBlobURL } from '@ffmpeg/util';
+import Image from 'next/image';
 
 interface VideoFormat {
   quality: string;
@@ -94,9 +95,10 @@ export default function Home() {
   // Inicializar FFmpeg quando o componente montar
   useEffect(() => {
     loadFFmpeg();
-  }, []);
+  }, [loadFFmpeg]);
 
-  // Função para combinar vídeo e áudio
+  // Função para combinar vídeo e áudio (não utilizada atualmente)
+  /*
   const combineVideoAudio = async (videoFormat: VideoFormat, audioFormat: VideoFormat) => {
     if (!ffmpegLoaded || !ffmpegRef.current) {
       await loadFFmpeg();
@@ -244,6 +246,7 @@ export default function Home() {
       addJobLog(jobId, `📊 Arquivo final gerado: ${((combinedData as Uint8Array).byteLength / (1024 * 1024)).toFixed(1)} MB`);
 
       // Criar blob e download
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const blob = new Blob([combinedData as any], { type: 'video/mp4' });
       const url = URL.createObjectURL(blob);
 
@@ -333,6 +336,7 @@ export default function Home() {
       }, 30000);
     }
   };
+  */
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -368,8 +372,6 @@ export default function Home() {
       setLoading(false);
     }
   };
-
-  const [selectedFormat, setSelectedFormat] = useState<VideoFormat | null>(null);
 
   const handleDownload = async (format: VideoFormat) => {
     if (!format?.downloadUrl) return;
@@ -661,9 +663,11 @@ export default function Home() {
               <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
                 {/* Thumbnail e Info Básica */}
                 <div className="xl:col-span-1">
-                  <img
+                  <Image
                     src={videoInfo.thumbnail}
                     alt={videoInfo.title}
+                    width={400}
+                    height={256}
                     className="w-full h-48 md:h-64 object-cover rounded-2xl shadow-xl mb-6"
                   />
 
