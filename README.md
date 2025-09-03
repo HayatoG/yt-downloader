@@ -1,36 +1,78 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# YouTube Downloader
 
-## Getting Started
+Uma aplicação Next.js para download de vídeos do YouTube de forma simples e direta.
 
-First, run the development server:
+## Funcionalidades
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- ✅ Interface limpa e intuitiva
+- ✅ Download direto para o computador do usuário
+- ✅ Visualização de informações do vídeo (título, duração, thumbnail)
+- ✅ Suporte a diferentes qualidades de vídeo
+- ✅ Design responsivo com modo escuro
+- ✅ Validação de URLs do YouTube
+
+## Tecnologias Utilizadas
+
+- **Next.js 15** - Framework React para aplicações web
+- **TypeScript** - Tipagem estática para JavaScript
+- **Tailwind CSS** - Framework de CSS utilitário
+- **@distube/ytdl-core** - Biblioteca para download de vídeos do YouTube
+- **React Hooks** - Para gerenciamento de estado
+
+## Como Usar
+
+1. **Instalação das dependências:**
+   ```bash
+   npm install
+   ```
+
+2. **Executar em modo desenvolvimento:**
+   ```bash
+   npm run dev
+   ```
+
+3. **Acessar a aplicação:**
+   - Abra [http://localhost:3000](http://localhost:3000) no seu navegador
+
+4. **Usar a aplicação:**
+   - Cole a URL do vídeo do YouTube no campo de entrada
+   - Clique em "Obter Informações do Vídeo"
+   - Visualize as informações do vídeo
+   - Clique em "Baixar Vídeo" para fazer o download
+
+## Estrutura do Projeto
+
+```
+src/
+├── app/
+│   ├── api/
+│   │   └── download/
+│   │       └── route.ts          # API para processar downloads
+│   ├── globals.css               # Estilos globais
+│   ├── layout.tsx                # Layout da aplicação
+│   └── page.tsx                  # Página principal
+└── ...
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Scripts Disponíveis
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- `npm run dev` - Inicia o servidor de desenvolvimento
+- `npm run build` - Gera build de produção
+- `npm start` - Inicia servidor de produção
+- `npm run lint` - Executa o linter
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Importante
 
-## Learn More
+⚠️ **Aviso Legal**: Este projeto é apenas para fins educacionais. Respeite os direitos autorais e os termos de uso do YouTube. O usuário é responsável pelo uso apropriado desta ferramenta.
 
-To learn more about Next.js, take a look at the following resources:
+## Contribuição
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. Fork o projeto
+2. Crie uma branch para sua feature (`git checkout -b feature/AmazingFeature`)
+3. Commit suas mudanças (`git commit -m 'Add some AmazingFeature'`)
+4. Push para a branch (`git push origin feature/AmazingFeature`)
+5. Abra um Pull Request
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Licença
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Este projeto está sob a licença MIT. Veja o arquivo `LICENSE` para mais detalhes.
