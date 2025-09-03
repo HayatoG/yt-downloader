@@ -338,6 +338,55 @@ export default function Home() {
   };
   */
 
+  // Função para processar vídeo no lado do cliente usando headers do navegador
+  const processVideoClientSide = async (videoUrl: string) => {
+    try {
+      console.log('Tentando processamento client-side para:', videoUrl);
+      
+      // Extrair video ID da URL
+      const videoId = extractVideoId(videoUrl);
+      if (!videoId) {
+        throw new Error('URL do YouTube inválida');
+      }
+
+      // Obter informações do navegador do usuário
+      const userAgent = navigator.userAgent;
+      const cookies = document.cookie;
+
+      // Usar nossa nova API que simula o navegador do usuário
+      const response = await fetch('/api/youtube-info', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          url: videoUrl,
+          userAgent: userAgent,
+          cookies: cookies
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Erro ao processar vídeo');
+      }
+
+      const data = await response.json();
+      return data;
+
+    } catch (error) {
+      console.error('Erro no processamento client-side:', error);
+      throw error;
+    }
+  };
+
+  // Função auxiliar para extrair ID do vídeo
+  const extractVideoId = (url: string): string | null => {
+    const regex = /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/;
+    const match = url.match(regex);
+    return match ? match[1] : null;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -351,6 +400,20 @@ export default function Home() {
     setVideoInfo(null);
 
     try {
+      // Primeiro, tentar processamento client-side (navegador do usuário)
+      console.log('🌐 Tentando processamento no navegador...');
+      try {
+        const clientResult = await processVideoClientSide(url.trim());
+        setVideoInfo(clientResult);
+        console.log('✅ Processamento client-side bem-sucedido!');
+        return;
+      } catch (clientError) {
+        console.log('⚠️ Processamento client-side falhou, tentando servidor...');
+        console.error('Erro client-side:', clientError);
+      }
+
+      // Fallback: usar servidor como antes
+      console.log('🖥️ Tentando processamento no servidor...');
       const response = await fetch('/api/download', {
         method: 'POST',
         headers: {
@@ -548,6 +611,18 @@ export default function Home() {
                 )}
               </button>
             </form>
+            
+            {/* Explicação da tecnologia */}
+            <div className="mt-6 bg-blue-500/20 backdrop-blur border border-blue-500/50 text-blue-100 rounded-2xl p-4">
+              <div className="flex items-center space-x-3">
+                <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span className="text-sm">
+                  <strong>🚀 Tecnologia Inteligente:</strong> Este site usa as informações do seu navegador (User-Agent, cookies) para acessar o YouTube, contornando bloqueios de bot!
+                </span>
+              </div>
+            </div>
           </div>
 
           {error && (

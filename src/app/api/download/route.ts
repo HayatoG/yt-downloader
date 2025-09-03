@@ -62,8 +62,8 @@ export async function POST(request: NextRequest) {
                 info = await ytdl.getBasicInfo(url);
             } catch (fallbackError) {
                 console.error('Ambas as tentativas falharam:', error, fallbackError);
-                return NextResponse.json({ 
-                    error: 'YouTube bloqueou o acesso. Tente novamente em alguns minutos ou use uma VPN.' 
+                return NextResponse.json({
+                    error: 'YouTube bloqueou o acesso. Tente novamente em alguns minutos ou use uma VPN.'
                 }, { status: 429 });
             }
         }
@@ -180,25 +180,25 @@ export async function POST(request: NextRequest) {
 
     } catch (error) {
         console.error('Erro ao processar vídeo:', error);
-        
+
         // Tratamento específico de erros
         if (error instanceof Error) {
             if (error.message.includes('Sign in to confirm') || error.message.includes('bot')) {
                 return NextResponse.json(
-                    { 
-                        error: 'YouTube detectou atividade suspeita. Aguarde alguns minutos e tente novamente, ou use uma VPN.' 
+                    {
+                        error: 'YouTube detectou atividade suspeita. Aguarde alguns minutos e tente novamente, ou use uma VPN.'
                     },
                     { status: 429 }
                 );
             }
-            
+
             if (error.message.includes('Video unavailable') || error.message.includes('private')) {
                 return NextResponse.json(
                     { error: 'Vídeo indisponível, privado ou foi removido.' },
                     { status: 404 }
                 );
             }
-            
+
             if (error.message.includes('age-restricted')) {
                 return NextResponse.json(
                     { error: 'Vídeo com restrição de idade. Não é possível baixar.' },
@@ -206,7 +206,7 @@ export async function POST(request: NextRequest) {
                 );
             }
         }
-        
+
         return NextResponse.json(
             { error: 'Erro ao processar o vídeo do YouTube. Tente novamente em alguns minutos.' },
             { status: 500 }
