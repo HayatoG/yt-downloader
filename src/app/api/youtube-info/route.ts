@@ -1,48 +1,103 @@
-import { NextRequest, NextResponse } from 'next/server';
-import ytdl from '@distube/ytdl-core';
-
-// Interceptar criação de arquivos de debug para evitar erros EROFS na Vercel
-// Monkey patch para prevenir criação de arquivos watch.html
+// Interceptar fs ANTES de importar qualquer coisa na Vercel
 if (typeof process !== 'undefined' && process.env.VERCEL) {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const fs = require('fs');
+    const Module = require('module');
+    const originalRequire = Module.prototype.require;
     
-    // Sobrescrever writeFileSync
-    const originalWriteFileSync = fs.writeFileSync;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    fs.writeFileSync = function(filename: string, data: any, options?: any) {
-        if (typeof filename === 'string' && filename.includes('watch.html')) {
-            console.log('🚫 Bloqueando criação de arquivo debug na Vercel:', filename);
-            return; // Ignorar silenciosamente
-        }
-        return originalWriteFileSync.call(this, filename, data, options);
-    };
+    Module.prototype.require = function(id: string, ...args: any[]) {
+        if (id === 'fs' || id === 'node:fs') {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const fs = originalRequire.call(this, id, ...args) as any;
+            
+            // Interceptar todas as operações de escrita de arquivo
+            const originalWriteFileSync = fs.writeFileSync;
+            const originalWriteFile = fs.writeFile;
+            const originalOpenSync = fs.openSync;
+            const originalOpen = fs.open;
+            const originalCreateWriteStream = fs.createWriteStream;
+            
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            fs.writeFileSync = function(filename: any, ...writeArgs: any[]) {
+                if (typeof filename === 'string' && filename.includes('watch.html')) {
+                    console.log('🚫 [FS INTERCEPT] Bloqueando writeFileSync:', filename);
+                    return;
+                }
+                return originalWriteFileSync.call(this, filename, ...writeArgs);
+            };
 
-    // Sobrescrever writeFile
-    const originalWriteFile = fs.writeFile;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    fs.writeFile = function(filename: string, data: any, options: any, callback?: any) {
-        if (typeof filename === 'string' && filename.includes('watch.html')) {
-            console.log('🚫 Bloqueando criação de arquivo debug na Vercel:', filename);
-            // Chamar callback com sucesso para não quebrar o fluxo
-            const cb = typeof options === 'function' ? options : callback;
-            if (cb) setImmediate(() => cb(null));
-            return;
-        }
-        return originalWriteFile.call(this, filename, data, options, callback);
-    };
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            fs.writeFile = function(filename: any, ...writeArgs: any[]) {
+                if (typeof filename === 'string' && filename.includes('watch.html')) {
+                    console.log('🚫 [FS INTERCEPT] Bloqueando writeFile:', filename);
+                    const callback = writeArgs[writeArgs.length - 1];
+                    if (typeof callback === 'function') {
+                        setImmediate(() => callback(null));
+                    }
+                    return;
+                }
+                return originalWriteFile.call(this, filename, ...writeArgs);
+            };
 
-    // Sobrescrever openSync se necessário
-    const originalOpenSync = fs.openSync;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    fs.openSync = function(path: string, flags: any, mode?: any) {
-        if (typeof path === 'string' && path.includes('watch.html')) {
-            console.log('🚫 Bloqueando abertura de arquivo debug na Vercel:', path);
-            throw new Error('ENOENT: no such file or directory'); // Simular que arquivo não existe
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            fs.openSync = function(path: any, ...openArgs: any[]) {
+                if (typeof path === 'string' && path.includes('watch.html')) {
+                    console.log('🚫 [FS INTERCEPT] Bloqueando openSync:', path);
+                    const error = new Error('ENOENT: no such file or directory, open \'' + path + '\'');
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    (error as any).code = 'ENOENT';
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    (error as any).errno = -2;
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    (error as any).syscall = 'open';
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    (error as any).path = path;
+                    throw error;
+                }
+                return originalOpenSync.call(this, path, ...openArgs);
+            };
+
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            fs.open = function(path: any, ...openArgs: any[]) {
+                if (typeof path === 'string' && path.includes('watch.html')) {
+                    console.log('🚫 [FS INTERCEPT] Bloqueando open:', path);
+                    const callback = openArgs[openArgs.length - 1];
+                    if (typeof callback === 'function') {
+                        const error = new Error('ENOENT: no such file or directory, open \'' + path + '\'');
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        (error as any).code = 'ENOENT';
+                        setImmediate(() => callback(error));
+                    }
+                    return;
+                }
+                return originalOpen.call(this, path, ...openArgs);
+            };
+
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            fs.createWriteStream = function(path: any, ...streamArgs: any[]) {
+                if (typeof path === 'string' && path.includes('watch.html')) {
+                    console.log('🚫 [FS INTERCEPT] Bloqueando createWriteStream:', path);
+                    // Retornar um stream fake que não faz nada
+                    // eslint-disable-next-line @typescript-eslint/no-require-imports
+                    const { Writable } = require('stream');
+                    return new Writable({
+                        write() { /* noop */ },
+                        end() { /* noop */ }
+                    });
+                }
+                return originalCreateWriteStream.call(this, path, ...streamArgs);
+            };
+            
+            return fs;
         }
-        return originalOpenSync.call(this, path, flags, mode);
+        return originalRequire.call(this, id, ...args);
     };
+    
+    console.log('🛡️ [FS INTERCEPT] Sistema de interceptação de arquivos ativo na Vercel');
 }
+
+import { NextRequest, NextResponse } from 'next/server';
+import ytdl from '@distube/ytdl-core';
 
 const YTDL_OPTIONS = {
     requestOptions: {
