@@ -1,6 +1,49 @@
 import { NextRequest, NextResponse } from 'next/server';
 import ytdl from '@distube/ytdl-core';
 
+// Interceptar criação de arquivos de debug para evitar erros EROFS na Vercel
+// Monkey patch para prevenir criação de arquivos watch.html
+if (typeof process !== 'undefined' && process.env.VERCEL) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const fs = require('fs');
+    
+    // Sobrescrever writeFileSync
+    const originalWriteFileSync = fs.writeFileSync;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    fs.writeFileSync = function(filename: string, data: any, options?: any) {
+        if (typeof filename === 'string' && filename.includes('watch.html')) {
+            console.log('🚫 Bloqueando criação de arquivo debug na Vercel:', filename);
+            return; // Ignorar silenciosamente
+        }
+        return originalWriteFileSync.call(this, filename, data, options);
+    };
+
+    // Sobrescrever writeFile
+    const originalWriteFile = fs.writeFile;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    fs.writeFile = function(filename: string, data: any, options: any, callback?: any) {
+        if (typeof filename === 'string' && filename.includes('watch.html')) {
+            console.log('🚫 Bloqueando criação de arquivo debug na Vercel:', filename);
+            // Chamar callback com sucesso para não quebrar o fluxo
+            const cb = typeof options === 'function' ? options : callback;
+            if (cb) setImmediate(() => cb(null));
+            return;
+        }
+        return originalWriteFile.call(this, filename, data, options, callback);
+    };
+
+    // Sobrescrever openSync se necessário
+    const originalOpenSync = fs.openSync;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    fs.openSync = function(path: string, flags: any, mode?: any) {
+        if (typeof path === 'string' && path.includes('watch.html')) {
+            console.log('🚫 Bloqueando abertura de arquivo debug na Vercel:', path);
+            throw new Error('ENOENT: no such file or directory'); // Simular que arquivo não existe
+        }
+        return originalOpenSync.call(this, path, flags, mode);
+    };
+}
+
 const YTDL_OPTIONS = {
     requestOptions: {
         headers: {
