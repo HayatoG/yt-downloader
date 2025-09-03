@@ -12,6 +12,11 @@ interface VideoFormat {
   fileSize?: string;
   hasAudio: boolean;
   hasVideo: boolean;
+  itag?: number;
+  bitrate?: number;
+  fps?: number | null;
+  width?: number | null;
+  height?: number | null;
 }
 
 interface VideoInfo {
@@ -97,246 +102,7 @@ export default function Home() {
     loadFFmpeg();
   }, [loadFFmpeg]);
 
-  // Função para combinar vídeo e áudio (não utilizada atualmente)
-  /*
-  const combineVideoAudio = async (videoFormat: VideoFormat, audioFormat: VideoFormat) => {
-    if (!ffmpegLoaded || !ffmpegRef.current) {
-      await loadFFmpeg();
-    }
 
-    if (!ffmpegRef.current) {
-      setError('Erro ao inicializar processador de vídeo');
-      return;
-    }
-
-    const jobId = Date.now().toString();
-    const fileName = `${videoInfo?.title?.replace(/[^a-zA-Z0-9\s\-_]/g, '') || 'video'}_${videoFormat.quality}_com_audio.mp4`;
-
-    const newJob: CombineJob = {
-      id: jobId,
-      videoFormat,
-      audioFormat,
-      status: 'preparing',
-      progress: 0,
-      logs: [],
-      fileName
-    };
-
-    setCombineJobs(prev => [...prev, newJob]);
-
-    addJobLog(jobId, `🎬 Iniciando combinação: ${videoFormat.quality} + Áudio`);
-    addJobLog(jobId, `📁 Vídeo: ${videoFormat.container} (${videoFormat.fileSize || 'tamanho desconhecido'})`);
-    addJobLog(jobId, `🎵 Áudio: ${audioFormat.container} (${audioFormat.fileSize || 'tamanho desconhecido'})`);
-    addJobLog(jobId, `💾 Arquivo final: ${fileName}`);
-
-    try {
-      const ffmpeg = ffmpegRef.current;
-
-      // Configurar listener para progresso do FFmpeg
-      ffmpeg.on('progress', ({ progress }) => {
-        if (progress > 0) {
-          const adjustedProgress = Math.min(50 + (progress * 40), 90);
-          setCombineJobs(prev => prev.map(job =>
-            job.id === jobId ? { ...job, progress: adjustedProgress } : job
-          ));
-        }
-      });
-
-      // Atualizar status: baixando arquivos
-      addJobLog(jobId, '⬇️ Iniciando downloads dos arquivos...');
-      setCombineJobs(prev => prev.map(job =>
-        job.id === jobId ? { ...job, status: 'downloading', progress: 5 } : job
-      ));
-
-      // Função helper para baixar usando proxy
-      const downloadWithProxy = async (url: string, type: 'vídeo' | 'áudio', retries = 2): Promise<Uint8Array> => {
-        for (let attempt = 1; attempt <= retries; attempt++) {
-          try {
-            addJobLog(jobId, `📥 Baixando ${type}... (tentativa ${attempt}/${retries})`);
-
-            // Usar proxy para contornar CORS
-            const proxyUrl = `/api/proxy?url=${encodeURIComponent(url)}`;
-            const response = await fetch(proxyUrl);
-
-            if (!response.ok) {
-              throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-
-            const arrayBuffer = await response.arrayBuffer();
-            const data = new Uint8Array(arrayBuffer);
-
-            addJobLog(jobId, `✅ ${type} baixado: ${(data.byteLength / (1024 * 1024)).toFixed(1)} MB`);
-            return data;
-
-          } catch (error) {
-            const errorMsg = error instanceof Error ? error.message : 'Erro desconhecido';
-            addJobLog(jobId, `⚠️ Erro na tentativa ${attempt}: ${errorMsg}`);
-
-            if (attempt === retries) {
-              throw new Error(`Falha ao baixar ${type} após ${retries} tentativas: ${errorMsg}`);
-            }
-
-            // Aguardar um pouco antes da próxima tentativa
-            await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
-          }
-        }
-        throw new Error(`Falha ao baixar ${type}`);
-      };
-
-      // Baixar vídeo usando proxy
-      addJobLog(jobId, '📥 Iniciando download do vídeo...');
-      const videoData = await downloadWithProxy(videoFormat.downloadUrl, 'vídeo');
-
-      setCombineJobs(prev => prev.map(job =>
-        job.id === jobId ? { ...job, progress: 25 } : job
-      ));
-
-      // Baixar áudio usando proxy
-      addJobLog(jobId, '🎵 Iniciando download do áudio...');
-      const audioData = await downloadWithProxy(audioFormat.downloadUrl, 'áudio');
-
-      // Atualizar status: processando
-      addJobLog(jobId, '⚙️ Preparando processamento...');
-      setCombineJobs(prev => prev.map(job =>
-        job.id === jobId ? { ...job, status: 'processing', progress: 45 } : job
-      ));
-
-      // Escrever arquivos no sistema de arquivos virtual do FFmpeg
-      addJobLog(jobId, '💾 Carregando arquivos no processador...');
-
-      // Usar extensões corretas baseadas no container
-      const videoExt = videoFormat.container === 'webm' ? 'webm' : 'mp4';
-      const audioExt = audioFormat.container === 'webm' ? 'webm' : audioFormat.container === 'm4a' ? 'm4a' : 'mp4';
-
-      await ffmpeg.writeFile(`video.${videoExt}`, videoData);
-      await ffmpeg.writeFile(`audio.${audioExt}`, audioData);
-
-      addJobLog(jobId, `📁 Arquivos carregados: video.${videoExt} e audio.${audioExt}`);
-
-      // Executar comando FFmpeg para combinar com configurações otimizadas
-      addJobLog(jobId, '🔗 Combinando vídeo e áudio...');
-      setCombineJobs(prev => prev.map(job =>
-        job.id === jobId ? { ...job, progress: 50 } : job
-      ));
-
-      // Comando FFmpeg otimizado para melhor compatibilidade
-      const command = [
-        '-i', `video.${videoExt}`,
-        '-i', `audio.${audioExt}`,
-        '-c:v', 'copy',
-        '-c:a', 'aac',
-        '-b:a', '128k',
-        '-movflags', '+faststart',
-        '-shortest',
-        '-y',  // Sobrescrever arquivo de saída
-        'output.mp4'
-      ];
-
-      addJobLog(jobId, `🎮 Executando: ffmpeg ${command.join(' ')}`);
-      await ffmpeg.exec(command);
-
-      // Atualizar progresso
-      addJobLog(jobId, '📦 Finalizando arquivo...');
-      setCombineJobs(prev => prev.map(job =>
-        job.id === jobId ? { ...job, progress: 90 } : job
-      ));
-
-      // Ler arquivo combinado
-      const combinedData = await ffmpeg.readFile('output.mp4');
-      addJobLog(jobId, `📊 Arquivo final gerado: ${((combinedData as Uint8Array).byteLength / (1024 * 1024)).toFixed(1)} MB`);
-
-      // Criar blob e download
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const blob = new Blob([combinedData as any], { type: 'video/mp4' });
-      const url = URL.createObjectURL(blob);
-
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = fileName;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-
-      // Limpar URL
-      URL.revokeObjectURL(url);
-
-      // Limpar arquivos temporários
-      try {
-        await ffmpeg.deleteFile(`video.${videoExt}`);
-        await ffmpeg.deleteFile(`audio.${audioExt}`);
-        await ffmpeg.deleteFile('output.mp4');
-        addJobLog(jobId, '🧹 Arquivos temporários removidos');
-      } catch (cleanupError) {
-        console.warn('Erro ao limpar arquivos temporários:', cleanupError);
-      }
-
-      // Atualizar status: concluído
-      addJobLog(jobId, '🎉 Combinação concluída com sucesso!');
-      addJobLog(jobId, `💾 Download iniciado: ${fileName}`);
-      setCombineJobs(prev => prev.map(job =>
-        job.id === jobId ? { ...job, status: 'completed', progress: 100 } : job
-      ));
-
-      // Remover job após 10 segundos
-      setTimeout(() => {
-        setCombineJobs(prev => prev.filter(job => job.id !== jobId));
-      }, 10000);
-
-    } catch (error) {
-      console.error('Erro ao combinar vídeo e áudio:', error);
-
-      let errorMessage = 'Erro desconhecido';
-      if (error instanceof Error) {
-        if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
-          errorMessage = 'Erro de conectividade. Verifique sua conexão com a internet e tente novamente.';
-        } else if (error.message.includes('Falha ao baixar') || error.message.includes('HTTP 403')) {
-          errorMessage = 'URL do YouTube expirada ou bloqueada. Tente obter as informações do vídeo novamente.';
-        } else if (error.message.includes('HTTP 404')) {
-          errorMessage = 'Arquivo não encontrado. O vídeo pode ter sido removido ou estar indisponível.';
-        } else if (error.message.includes('HTTP 429')) {
-          errorMessage = 'Muitas requisições. Aguarde alguns minutos antes de tentar novamente.';
-        } else if (error.message.includes('CORS')) {
-          errorMessage = 'Erro de política de origem cruzada. Tentando método alternativo...';
-        } else if (error.message.includes('ffmpeg') || error.message.includes('codec')) {
-          errorMessage = 'Erro no processamento de vídeo. Tente um formato diferente ou com qualidade menor.';
-        } else if (error.message.includes('tentativas')) {
-          errorMessage = error.message; // Usar mensagem específica do sistema de retry
-        } else {
-          errorMessage = `Erro: ${error.message}`;
-        }
-      }
-
-      addJobLog(jobId, `❌ Erro: ${errorMessage}`);
-      setCombineJobs(prev => prev.map(job =>
-        job.id === jobId ? {
-          ...job,
-          status: 'error',
-          error: errorMessage
-        } : job
-      ));
-
-      // Tentar limpar arquivos mesmo em caso de erro
-      try {
-        const ffmpeg = ffmpegRef.current;
-        if (ffmpeg) {
-          await ffmpeg.deleteFile('video.mp4');
-          await ffmpeg.deleteFile('video.webm');
-          await ffmpeg.deleteFile('audio.mp4');
-          await ffmpeg.deleteFile('audio.webm');
-          await ffmpeg.deleteFile('audio.m4a');
-          await ffmpeg.deleteFile('output.mp4');
-        }
-      } catch (cleanupError) {
-        console.warn('Erro ao limpar arquivos após falha:', cleanupError);
-      }
-
-      // Remover job com erro após 30 segundos
-      setTimeout(() => {
-        setCombineJobs(prev => prev.filter(job => job.id !== jobId));
-      }, 30000);
-    }
-  };
-  */
 
   // Função para processar vídeo no lado do cliente usando headers do navegador
   const processVideoClientSide = async (videoUrl: string) => {
@@ -349,20 +115,14 @@ export default function Home() {
         throw new Error('URL do YouTube inválida');
       }
 
-      // Obter informações do navegador do usuário
-      const userAgent = navigator.userAgent;
-      const cookies = document.cookie;
-
-      // Usar nossa nova API que simula o navegador do usuário
+      // Usar nossa nova API que retorna URLs diretas
       const response = await fetch('/api/youtube-info', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          url: videoUrl,
-          userAgent: userAgent,
-          cookies: cookies
+          url: videoUrl
         }),
       });
 
@@ -448,7 +208,7 @@ export default function Home() {
   const handleDownload = async (format: VideoFormat) => {
     if (!format?.downloadUrl) return;
 
-    const formatKey = `${format.quality}-${format.container}`;
+    const formatKey = `${format.quality}-${format.container}-${format.itag || 0}`;
 
     // Verificar se já está baixando
     if (downloadingFormats.has(formatKey)) return;
@@ -461,50 +221,89 @@ export default function Home() {
       const safeTitle = videoInfo?.title?.replace(/[^a-zA-Z0-9\s\-_]/g, '') || 'video';
       const fileName = `${safeTitle}_${format.quality}.${format.container}`;
 
-      console.log(`Iniciando download de ${format.quality} (${format.container})`);
+      console.log(`🔄 Tentando download direto de ${format.quality} (${format.container})`);
 
-      // Se a URL apontar para uma página do YouTube (watch/embed) ou não parecer
-      // conter uma extensão de mídia, usar o proxy para iniciar o download e
-      // evitar navegar para o youtube.com.
-      const isYoutubePage = /(?:youtube\.com\/watch|youtu\.be\/|youtube\.com\/embed\/)/i.test(format.downloadUrl);
-      const hasMediaExtension = /\.(mp4|webm|m4a|mp3|ogg|opus)(?:\?|$)/i.test(format.downloadUrl);
+      // Estratégia 1: Tentar download direto primeiro
+      let downloadSuccess = false;
 
-      const shouldUseProxy = isYoutubePage || !hasMediaExtension;
+      try {
+        // Verificar se URL é acessível diretamente (teste simples)
+        const testResponse = await fetch(format.downloadUrl, {
+          method: 'HEAD',
+          mode: 'no-cors',
+          cache: 'no-cache'
+        });
 
-      if (shouldUseProxy) {
-        const proxyUrl = `/api/proxy?url=${encodeURIComponent(format.downloadUrl)}`;
+        console.log('✅ URL acessível, iniciando download direto...');
 
-        const link = document.createElement('a');
-        link.href = proxyUrl;
-        link.download = fileName;
-        // Não abrir em nova aba para downloads via proxy; força download
-        link.rel = 'noopener noreferrer';
-        link.style.display = 'none';
+        // Download direto usando blob
+        const downloadResponse = await fetch(format.downloadUrl, {
+          method: 'GET',
+          mode: 'cors', // Tentar CORS primeiro
+          cache: 'no-cache'
+        });
 
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        if (downloadResponse.ok) {
+          const blob = await downloadResponse.blob();
 
-        console.log(`Download via proxy iniciado para ${format.quality}`);
+          // Criar URL do blob e baixar
+          const blobUrl = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = blobUrl;
+          link.download = fileName;
+          link.style.display = 'none';
 
-      } else {
-        // Caso a URL seja um link direto para um arquivo, usar o método direto
-        const link = document.createElement('a');
-        link.href = format.downloadUrl;
-        link.download = fileName;
-        link.target = '_blank';
-        link.rel = 'noopener noreferrer';
-        link.style.display = 'none';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
 
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+          // Limpar URL do blob após um tempo
+          setTimeout(() => URL.revokeObjectURL(blobUrl), 5000);
 
-        console.log(`Download direto iniciado para ${format.quality}`);
+          downloadSuccess = true;
+          console.log(`✅ Download direto bem-sucedido para ${format.quality}`);
+        }
+      } catch (directError) {
+        console.log('⚠️ Download direto via fetch falhou, tentando método alternativo...', directError);
+
+        // Estratégia 2: Tentar download direto via link (menos confiável mas funciona em alguns casos)
+        try {
+          const link = document.createElement('a');
+          link.href = format.downloadUrl;
+          link.download = fileName;
+          link.target = '_blank';
+          link.rel = 'noopener noreferrer';
+          link.style.display = 'none';
+
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+
+          downloadSuccess = true;
+          console.log(`✅ Download direto via link iniciado para ${format.quality}`);
+        } catch (linkError) {
+          console.log('⚠️ Download direto via link também falhou...', linkError);
+        }
+      }
+
+      // Estratégia 3: Fallback para proxy se download direto falhou
+      if (!downloadSuccess) {
+        console.log('🔄 Usando proxy como fallback...');
+
+        const proxyUrl = `/api/proxy?url=${encodeURIComponent(format.downloadUrl)}&filename=${encodeURIComponent(fileName)}`;
+
+        // Abrir em nova aba para proxy
+        const proxyWindow = window.open(proxyUrl, '_blank');
+
+        if (proxyWindow) {
+          console.log(`✅ Download via proxy iniciado para ${format.quality}`);
+        } else {
+          throw new Error('Não foi possível abrir janela para download via proxy. Verifique se o bloqueador de pop-up está desabilitado.');
+        }
       }
 
     } catch (error) {
-      console.error('Erro ao baixar arquivo:', error);
+      console.error('❌ Erro ao baixar arquivo:', error);
       setError(`Erro ao baixar ${format.quality}: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
     } finally {
       // Remover do conjunto de downloads em andamento após um delay
@@ -569,7 +368,7 @@ export default function Home() {
               YouTube Downloader
             </h1>
             <p className="text-xl text-gray-300 max-w-3xl mx-auto">
-              Baixe vídeos e combine com áudio usando processamento local. Rápido, seguro e privado.
+              Baixe vídeos diretamente do seu IP com todas as resoluções disponíveis. Fallback automático para proxy se necessário.
             </p>
           </div>
 
@@ -626,7 +425,7 @@ export default function Home() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                 <span className="text-sm">
-                  <strong>🚀 Tecnologia Inteligente:</strong> Este site usa as informações do seu navegador (User-Agent, cookies) para acessar o YouTube, contornando bloqueios de bot!
+                  <strong>🚀 Downloads Diretos com Fallback:</strong> Os arquivos são baixados diretamente do seu IP para o YouTube. Se falhar, usa proxy automaticamente.
                 </span>
               </div>
             </div>
@@ -781,6 +580,11 @@ export default function Home() {
                     <div className="bg-white/10 rounded-xl p-4 text-center">
                       <div className="text-gray-300 text-sm mb-1">Formatos</div>
                       <div className="text-white font-bold text-xl">{videoInfo.formats.length}</div>
+                      <div className="text-xs text-gray-400 mt-1">
+                        🎬 {videoInfo.formats.filter(f => f.hasAudio && f.hasVideo).length} |
+                        🎥 {videoInfo.formats.filter(f => f.hasVideo && !f.hasAudio).length} |
+                        🎵 {videoInfo.formats.filter(f => f.hasAudio && !f.hasVideo).length}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -817,6 +621,12 @@ export default function Home() {
                                       {format.fileSize && (
                                         <span className="px-3 py-1 bg-blue-500/30 rounded-lg text-sm text-blue-200">{format.fileSize}</span>
                                       )}
+                                      {format.fps && (
+                                        <span className="px-2 py-1 bg-purple-500/30 rounded text-xs text-purple-200">{format.fps}fps</span>
+                                      )}
+                                      {format.width && format.height && (
+                                        <span className="px-2 py-1 bg-orange-500/30 rounded text-xs text-orange-200">{format.width}x{format.height}</span>
+                                      )}
                                     </div>
                                     <span className="px-3 py-1 bg-green-500/30 rounded-lg text-green-200 text-sm">
                                       ✅ Arquivo completo com áudio e vídeo
@@ -825,8 +635,8 @@ export default function Home() {
 
                                   <button
                                     onClick={() => handleDownload(format)}
-                                    disabled={downloadingFormats.has(`${format.quality}-${format.container}`)}
-                                    className={`font-bold py-3 px-6 rounded-xl transition-all duration-300 transform shadow-lg flex items-center justify-center gap-2 min-w-[120px] ${downloadingFormats.has(`${format.quality}-${format.container}`)
+                                    disabled={downloadingFormats.has(`${format.quality}-${format.container}-${format.itag || 0}`)}
+                                    className={`font-bold py-3 px-6 rounded-xl transition-all duration-300 transform shadow-lg flex items-center justify-center gap-2 min-w-[120px] ${downloadingFormats.has(`${format.quality}-${format.container}-${format.itag || 0}`)
                                       ? 'bg-gradient-to-r from-gray-500 to-gray-600 cursor-not-allowed'
                                       : 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 hover:scale-105'
                                       } text-white`}
@@ -872,6 +682,12 @@ export default function Home() {
                                       {format.fileSize && (
                                         <span className="px-3 py-1 bg-blue-500/30 rounded-lg text-sm text-blue-200">{format.fileSize}</span>
                                       )}
+                                      {format.fps && (
+                                        <span className="px-2 py-1 bg-purple-500/30 rounded text-xs text-purple-200">{format.fps}fps</span>
+                                      )}
+                                      {format.width && format.height && (
+                                        <span className="px-2 py-1 bg-orange-500/30 rounded text-xs text-orange-200">{format.width}x{format.height}</span>
+                                      )}
                                     </div>
                                     <span className="px-3 py-1 bg-orange-500/30 rounded-lg text-orange-200 text-sm">
                                       ⚠️ Apenas vídeo - sem áudio
@@ -881,13 +697,13 @@ export default function Home() {
                                   <div className="flex flex-col sm:flex-row gap-3">
                                     <button
                                       onClick={() => handleDownload(format)}
-                                      disabled={downloadingFormats.has(`${format.quality}-${format.container}`)}
-                                      className={`font-bold py-3 px-6 rounded-xl transition-all duration-300 transform shadow-lg flex items-center justify-center gap-2 min-w-[120px] ${downloadingFormats.has(`${format.quality}-${format.container}`)
+                                      disabled={downloadingFormats.has(`${format.quality}-${format.container}-${format.itag || 0}`)}
+                                      className={`font-bold py-3 px-6 rounded-xl transition-all duration-300 transform shadow-lg flex items-center justify-center gap-2 min-w-[120px] ${downloadingFormats.has(`${format.quality}-${format.container}-${format.itag || 0}`)
                                         ? 'bg-gradient-to-r from-gray-500 to-gray-600 cursor-not-allowed'
                                         : 'bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 hover:scale-105'
                                         } text-white`}
                                     >
-                                      {downloadingFormats.has(`${format.quality}-${format.container}`) ? (
+                                      {downloadingFormats.has(`${format.quality}-${format.container}-${format.itag || 0}`) ? (
                                         <>
                                           <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
                                           <span className="hidden sm:inline">Baixando...</span>
@@ -902,16 +718,19 @@ export default function Home() {
                                       )}
                                     </button>
 
-                                    <button
-                                      onClick={() => handleDownloadVideoAndAudio(format)}
-                                      className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold py-3 px-6 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg flex items-center justify-center gap-2 min-w-[160px]"
-                                    >
-                                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4" />
-                                      </svg>
-                                      <span className="hidden sm:inline">Vídeo + Áudio</span>
-                                      <span className="sm:hidden">V+A</span>
-                                    </button>
+                                    {/* Só mostrar botão "Vídeo + Áudio" se existir áudio disponível */}
+                                    {videoInfo.formats.some(f => f.hasAudio && !f.hasVideo) && (
+                                      <button
+                                        onClick={() => handleDownloadVideoAndAudio(format)}
+                                        className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold py-3 px-6 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg flex items-center justify-center gap-2 min-w-[160px]"
+                                      >
+                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4" />
+                                        </svg>
+                                        <span className="hidden sm:inline">Vídeo + Áudio</span>
+                                        <span className="sm:hidden">V+A</span>
+                                      </button>
+                                    )}
                                   </div>
                                 </div>
                               </div>
@@ -940,6 +759,9 @@ export default function Home() {
                                       {format.fileSize && (
                                         <span className="px-3 py-1 bg-blue-500/30 rounded-lg text-sm text-blue-200">{format.fileSize}</span>
                                       )}
+                                      {format.bitrate && (
+                                        <span className="px-2 py-1 bg-green-500/30 rounded text-xs text-green-200">{Math.round(format.bitrate / 1000)}kbps</span>
+                                      )}
                                     </div>
                                     <span className="px-3 py-1 bg-blue-500/30 rounded-lg text-blue-200 text-sm">
                                       🎵 Arquivo de áudio apenas
@@ -948,13 +770,13 @@ export default function Home() {
 
                                   <button
                                     onClick={() => handleDownload(format)}
-                                    disabled={downloadingFormats.has(`${format.quality}-${format.container}`)}
-                                    className={`font-bold py-3 px-6 rounded-xl transition-all duration-300 transform shadow-lg flex items-center justify-center gap-2 min-w-[120px] ${downloadingFormats.has(`${format.quality}-${format.container}`)
+                                    disabled={downloadingFormats.has(`${format.quality}-${format.container}-${format.itag || 0}`)}
+                                    className={`font-bold py-3 px-6 rounded-xl transition-all duration-300 transform shadow-lg flex items-center justify-center gap-2 min-w-[120px] ${downloadingFormats.has(`${format.quality}-${format.container}-${format.itag || 0}`)
                                       ? 'bg-gradient-to-r from-gray-500 to-gray-600 cursor-not-allowed'
                                       : 'bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 hover:scale-105'
                                       } text-white`}
                                   >
-                                    {downloadingFormats.has(`${format.quality}-${format.container}`) ? (
+                                    {downloadingFormats.has(`${format.quality}-${format.container}-${format.itag || 0}`) ? (
                                       <>
                                         <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
                                         <span className="hidden sm:inline">Baixando...</span>
@@ -985,7 +807,7 @@ export default function Home() {
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                 </svg>
-                <span className="text-sm">Processamento 100% local</span>
+                <span className="text-sm">Download direto com fallback para proxy</span>
               </div>
               <div className="flex items-center space-x-2">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

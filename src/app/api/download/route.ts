@@ -67,12 +67,59 @@ export async function POST(request: NextRequest) {
                 }, { status: 429 });
             }
         }
-        const videoDetails = info.videoDetails;
+        // videoDetails pode vir em lugares diferentes dependendo da versão/fallback
+        const videoDetails = info.videoDetails || info.player_response?.videoDetails || { title: 'Unknown', lengthSeconds: '0', thumbnails: [] };
 
-        // Separar formatos com e sem áudio
-        const videoAndAudioFormats = ytdl.filterFormats(info.formats, 'videoandaudio');
-        const videoOnlyFormats = ytdl.filterFormats(info.formats, 'videoonly');
-        const audioOnlyFormats = ytdl.filterFormats(info.formats, 'audioonly');
+        // Se info.formats estiver presente, usar normalmente
+        let rawFormats: any[] = info.formats || [];
+
+        // Se não houver formatos, tentar extrair do streamingData
+        if (!rawFormats.length && info.player_response?.streamingData) {
+            const streamingData = info.player_response.streamingData;
+            rawFormats = [
+                ...(streamingData.formats || []),
+                ...(streamingData.adaptiveFormats || [])
+            ].map((format: any) => ({
+                ...format,
+                // Mapear propriedades para compatibilidade com ytdl.filterFormats
+                hasAudio: format.mimeType?.includes('audio') || (!format.mimeType?.includes('video') && format.audioQuality) || false,
+                hasVideo: format.mimeType?.includes('video') || format.width || false,
+                qualityLabel: format.qualityLabel || format.quality || 'Unknown',
+                container: format.mimeType?.split('/')[1]?.split(';')[0] || 'mp4',
+                url: format.url,
+                contentLength: format.contentLength,
+                itag: format.itag || 0,
+                quality: format.quality || 'Unknown',
+                codecs: format.codecs || '',
+                bitrate: format.bitrate || 0,
+                audioBitrate: format.audioBitrate || 0
+            }));
+        }
+
+        console.log('Debug info.formats:', info.formats ? 'present' : 'undefined');
+        console.log('Debug player_response:', info.player_response ? 'present' : 'undefined');
+        console.log('Debug streamingData:', info.player_response?.streamingData ? 'present' : 'undefined');
+        console.log('Debug rawFormats length:', rawFormats.length);
+
+        // Usar filterFormats se rawFormats veio de info.formats, senão filtrar manualmente
+        let videoAndAudioFormats, videoOnlyFormats, audioOnlyFormats;
+
+        if (info.formats) {
+            videoAndAudioFormats = ytdl.filterFormats(rawFormats, 'videoandaudio');
+            videoOnlyFormats = ytdl.filterFormats(rawFormats, 'videoonly');
+            audioOnlyFormats = ytdl.filterFormats(rawFormats, 'audioonly');
+        } else {
+            // Filtragem manual para formatos do streamingData
+            videoAndAudioFormats = rawFormats.filter(f => f.hasVideo && f.hasAudio);
+            videoOnlyFormats = rawFormats.filter(f => f.hasVideo && !f.hasAudio);
+            audioOnlyFormats = rawFormats.filter(f => f.hasAudio && !f.hasVideo);
+        }
+
+        console.log('Debug filtered formats:', {
+            videoAndAudio: videoAndAudioFormats.length,
+            videoOnly: videoOnlyFormats.length,
+            audioOnly: audioOnlyFormats.length
+        });
 
         if (videoAndAudioFormats.length === 0 && videoOnlyFormats.length === 0 && audioOnlyFormats.length === 0) {
             return NextResponse.json({ error: 'Nenhum formato disponível para download' }, { status: 404 });
