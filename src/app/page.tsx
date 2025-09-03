@@ -49,7 +49,8 @@ export default function Home() {
 
   const ffmpegRef = useRef<FFmpeg | null>(null);
 
-  // Função helper para adicionar logs a um job
+  // Função helper para adicionar logs a um job (não usada atualmente)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const addJobLog = (jobId: string, message: string) => {
     const timestamp = new Date().toLocaleTimeString();
     const logMessage = `[${timestamp}] ${message}`;
@@ -70,37 +71,37 @@ export default function Home() {
     }
   }, []);
 
-  // Carregar FFmpeg
-  const loadFFmpeg = async () => {
-    if (ffmpegLoaded || !ffmpegRef.current) return;
-
-    setFfmpegLoading(true);
-    try {
-      const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
-      const ffmpeg = ffmpegRef.current;
-
-      ffmpeg.on('log', ({ message }) => {
-        console.log(message);
-      });
-
-      await ffmpeg.load({
-        coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-        wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
-      });
-
-      setFfmpegLoaded(true);
-    } catch (error) {
-      console.error('Erro ao carregar FFmpeg:', error);
-      setError('Erro ao carregar processador de vídeo');
-    } finally {
-      setFfmpegLoading(false);
-    }
-  };
-
   // Inicializar FFmpeg quando o componente montar
   useEffect(() => {
+    // Carregar FFmpeg
+    const loadFFmpeg = async () => {
+      if (ffmpegLoaded || !ffmpegRef.current) return;
+
+      setFfmpegLoading(true);
+      try {
+        const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
+        const ffmpeg = ffmpegRef.current;
+
+        ffmpeg.on('log', ({ message }) => {
+          console.log(message);
+        });
+
+        await ffmpeg.load({
+          coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+          wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+        });
+
+        setFfmpegLoaded(true);
+      } catch (error) {
+        console.error('Erro ao carregar FFmpeg:', error);
+        setError('Erro ao carregar processador de vídeo');
+      } finally {
+        setFfmpegLoading(false);
+      }
+    };
+
     loadFFmpeg();
-  }, [loadFFmpeg]);
+  }, [ffmpegLoaded]);
 
 
 
@@ -228,6 +229,7 @@ export default function Home() {
 
       try {
         // Verificar se URL é acessível diretamente (teste simples)
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const testResponse = await fetch(format.downloadUrl, {
           method: 'HEAD',
           mode: 'no-cors',

@@ -71,6 +71,7 @@ export async function POST(request: NextRequest) {
         const videoDetails = info.videoDetails || info.player_response?.videoDetails || { title: 'Unknown', lengthSeconds: '0', thumbnails: [] };
 
         // Se info.formats estiver presente, usar normalmente
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         let rawFormats: any[] = info.formats || [];
 
         // Se não houver formatos, tentar extrair do streamingData
@@ -79,6 +80,7 @@ export async function POST(request: NextRequest) {
             rawFormats = [
                 ...(streamingData.formats || []),
                 ...(streamingData.adaptiveFormats || [])
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
             ].map((format: any) => ({
                 ...format,
                 // Mapear propriedades para compatibilidade com ytdl.filterFormats

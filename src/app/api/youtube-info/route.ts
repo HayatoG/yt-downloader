@@ -39,7 +39,8 @@ export async function POST(request: NextRequest) {
         console.log('🔍 Processando URL:', url);
 
         // Estratégia múltipla para obter informações e formatos
-        let info;
+        let info: ytdl.videoInfo | undefined;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         let allFormatsData: any[] = [];
 
         // Opções mais agressivas para contornar restrições
@@ -91,12 +92,14 @@ export async function POST(request: NextRequest) {
                 console.log(`📹 Encontrados ${info.formats.length} formatos em info.formats`);
 
                 // Filtrar apenas formatos com URL válida
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const validFormats = info.formats.filter((format: any) => format.url);
                 console.log(`✅ Formatos com URL válida: ${validFormats.length}`);
 
                 allFormatsData = [...info.formats]; // Manter todos para análise, filtraremos depois
 
                 // Log detalhado dos primeiros formatos
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 info.formats.slice(0, 10).forEach((format: any, i: number) => {
                     console.log(`  Formato ${i}: itag=${format.itag}, quality=${format.qualityLabel || format.quality}, mimeType=${format.mimeType}, hasUrl=${!!format.url}`);
                 });
@@ -117,6 +120,7 @@ export async function POST(request: NextRequest) {
 
                 if (info.formats) {
                     console.log(`📹 Encontrados ${info.formats.length} formatos em info.formats`);
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     const validFormats = info.formats.filter((format: any) => format.url);
                     console.log(`✅ Formatos com URL válida: ${validFormats.length}`);
                     allFormatsData = [...info.formats];
@@ -139,6 +143,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Estratégia 2.5: Tentar getInfo uma última vez com configurações mínimas se ainda não temos formatos válidos
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         if (allFormatsData.length === 0 || allFormatsData.filter((f: any) => f.url).length === 0) {
             try {
                 console.log('📡 Tentativa 2.5: ytdl.getInfo com configurações mínimas para formatos...');
@@ -151,12 +156,15 @@ export async function POST(request: NextRequest) {
                 };
 
                 const fallbackInfo = await ytdl.getInfo(url, minimalOptions);
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 if (fallbackInfo.formats && fallbackInfo.formats.some((f: any) => f.url)) {
                     console.log(`🔄 Fallback: Encontrados ${fallbackInfo.formats.length} formatos`);
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     const validFallbackFormats = fallbackInfo.formats.filter((f: any) => f.url);
                     console.log(`✅ Formatos válidos no fallback: ${validFallbackFormats.length}`);
 
                     // Substituir ou adicionar apenas se conseguiu formatos melhores
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     if (validFallbackFormats.length > allFormatsData.filter((f: any) => f.url).length) {
                         allFormatsData = [...fallbackInfo.formats];
                         console.log('🔄 Usando formatos do fallback');
@@ -180,6 +188,7 @@ export async function POST(request: NextRequest) {
             console.log(`� Formatos adaptivos: ${adaptiveFormats.length}`);
 
             // Log detalhado dos formatos adaptivos (onde estão as altas qualidades)
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             adaptiveFormats.slice(0, 10).forEach((format: any, i: number) => {
                 console.log(`  Adaptivo ${i}: itag=${format.itag}, quality=${format.qualityLabel || format.quality || 'N/A'}, type=${format.mimeType}, width=${format.width}, height=${format.height}`);
             });
@@ -189,6 +198,7 @@ export async function POST(request: NextRequest) {
             // Combinar com formatos já existentes, evitando duplicatas
             if (allFormatsData.length > 0) {
                 const existingItags = new Set(allFormatsData.map(f => f.itag));
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const newFormats = streamFormats.filter((f: any) => !existingItags.has(f.itag));
                 allFormatsData = [...allFormatsData, ...newFormats];
                 console.log(`🔗 Adicionados ${newFormats.length} novos formatos do streamingData`);
@@ -207,7 +217,8 @@ export async function POST(request: NextRequest) {
 
                 // Tentar diferentes qualidades conhecidas
                 const qualitiesAttempt = ['highest', 'lowest', 'highestvideo', 'lowestvideo', 'highestaudio', 'lowestaudio'];
-                let chosenFormats: any[] = [];
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const chosenFormats: any[] = [];
 
                 for (const quality of qualitiesAttempt) {
                     try {
@@ -216,7 +227,7 @@ export async function POST(request: NextRequest) {
                             chosenFormats.push(chosen);
                             console.log(`✅ Formato escolhido para ${quality}: itag=${chosen.itag}, quality=${chosen.qualityLabel || chosen.quality}`);
                         }
-                    } catch (chooseErr) {
+                    } catch {
                         // Não logar erro, é normal algumas qualidades não estarem disponíveis
                     }
                 }
@@ -248,8 +259,10 @@ export async function POST(request: NextRequest) {
         const videoDetails = info.videoDetails || info.player_response?.videoDetails || { title: 'Unknown', lengthSeconds: '0', thumbnails: [] };
 
         // Processar e categorizar formatos
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const processedFormats: any[] = [];
 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         allFormatsData.forEach((format: any, index: number) => {
             try {
                 // Debug detalhado do formato
@@ -265,7 +278,7 @@ export async function POST(request: NextRequest) {
                 });
 
                 // Verificar se o formato tem URL válida ou pode ser obtida
-                let finalUrl = format.url;
+                const finalUrl = format.url;
 
                 // Se não tem URL direta, tentar outras formas
                 if (!finalUrl) {

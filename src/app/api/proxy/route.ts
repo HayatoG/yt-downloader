@@ -111,7 +111,7 @@ export async function GET(request: NextRequest) {
                 if (nameFromQs) {
                     filename = decodeURIComponent(nameFromQs);
                 }
-            } catch (e) {
+            } catch {
                 // ignore
             }
         }
