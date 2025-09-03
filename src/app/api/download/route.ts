@@ -1,6 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
 import ytdl from '@distube/ytdl-core';
 
+// Configurações para evitar detecção de bot
+const YTDL_OPTIONS = {
+    requestOptions: {
+        headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Accept-Encoding': 'gzip, deflate',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1'
+        }
+    }
+};
+
+// Cache simples para evitar requests repetidos
+const cache = new Map();
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutos
+
+// Rate limiting simples
+let lastRequest = 0;
+const MIN_DELAY = 1000; // 1 segundo entre requests
+
 export async function POST(request: NextRequest) {
     try {
         const { url } = await request.json();
@@ -14,8 +36,37 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'URL do YouTube inválida' }, { status: 400 });
         }
 
-        // Obter informações do vídeo
-        const info = await ytdl.getInfo(url);
+        // Rate limiting - aguardar entre requests
+        const now = Date.now();
+        if (now - lastRequest < MIN_DELAY) {
+            await new Promise(resolve => setTimeout(resolve, MIN_DELAY - (now - lastRequest)));
+        }
+        lastRequest = Date.now();
+
+        // Verificar cache
+        const cacheKey = url;
+        const cached = cache.get(cacheKey);
+        if (cached && (Date.now() - cached.timestamp) < CACHE_DURATION) {
+            console.log('Retornando dados do cache para:', url);
+            return NextResponse.json(cached.data);
+        }
+
+        // Obter informações do vídeo com configurações anti-bot
+        let info;
+        try {
+            info = await ytdl.getInfo(url, YTDL_OPTIONS);
+        } catch (error) {
+            // Fallback: tentar sem opções customizadas
+            console.log('Primeira tentativa falhou, tentando fallback...');
+            try {
+                info = await ytdl.getBasicInfo(url);
+            } catch (fallbackError) {
+                console.error('Ambas as tentativas falharam:', error, fallbackError);
+                return NextResponse.json({ 
+                    error: 'YouTube bloqueou o acesso. Tente novamente em alguns minutos ou use uma VPN.' 
+                }, { status: 429 });
+            }
+        }
         const videoDetails = info.videoDetails;
 
         // Separar formatos com e sem áudio
@@ -112,17 +163,52 @@ export async function POST(request: NextRequest) {
                 return bOrder - aOrder;
             });
 
-        return NextResponse.json({
+        const result = {
             title: videoDetails.title,
             duration: videoDetails.lengthSeconds,
             thumbnail: videoDetails.thumbnails[0]?.url,
             formats: availableFormats
+        };
+
+        // Armazenar no cache
+        cache.set(cacheKey, {
+            data: result,
+            timestamp: Date.now()
         });
+
+        return NextResponse.json(result);
 
     } catch (error) {
         console.error('Erro ao processar vídeo:', error);
+        
+        // Tratamento específico de erros
+        if (error instanceof Error) {
+            if (error.message.includes('Sign in to confirm') || error.message.includes('bot')) {
+                return NextResponse.json(
+                    { 
+                        error: 'YouTube detectou atividade suspeita. Aguarde alguns minutos e tente novamente, ou use uma VPN.' 
+                    },
+                    { status: 429 }
+                );
+            }
+            
+            if (error.message.includes('Video unavailable') || error.message.includes('private')) {
+                return NextResponse.json(
+                    { error: 'Vídeo indisponível, privado ou foi removido.' },
+                    { status: 404 }
+                );
+            }
+            
+            if (error.message.includes('age-restricted')) {
+                return NextResponse.json(
+                    { error: 'Vídeo com restrição de idade. Não é possível baixar.' },
+                    { status: 403 }
+                );
+            }
+        }
+        
         return NextResponse.json(
-            { error: 'Erro ao processar o vídeo do YouTube' },
+            { error: 'Erro ao processar o vídeo do YouTube. Tente novamente em alguns minutos.' },
             { status: 500 }
         );
     }

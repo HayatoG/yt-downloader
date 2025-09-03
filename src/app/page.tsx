@@ -362,7 +362,16 @@ export default function Home() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || 'Erro ao processar vídeo');
+        // Tratar diferentes tipos de erro
+        if (response.status === 429) {
+          throw new Error(data.error || 'YouTube bloqueou temporariamente. Aguarde alguns minutos.');
+        } else if (response.status === 404) {
+          throw new Error(data.error || 'Vídeo não encontrado ou indisponível.');
+        } else if (response.status === 403) {
+          throw new Error(data.error || 'Acesso negado a este vídeo.');
+        } else {
+          throw new Error(data.error || 'Erro ao processar vídeo');
+        }
       }
 
       setVideoInfo(data);
@@ -549,6 +558,17 @@ export default function Home() {
                 </svg>
                 <span className="font-medium">{error}</span>
               </div>
+              {error.includes('detectou atividade suspeita') && (
+                <div className="mt-4 text-sm text-red-200">
+                  <p className="mb-2">💡 <strong>Dicas para resolver:</strong></p>
+                  <ul className="list-disc list-inside space-y-1 ml-4">
+                    <li>Aguarde 2-5 minutos antes de tentar novamente</li>
+                    <li>Use uma VPN se o problema persistir</li>
+                    <li>Tente com vídeos diferentes</li>
+                    <li>Evite fazer muitas requisições seguidas</li>
+                  </ul>
+                </div>
+              )}
             </div>
           )}
 
