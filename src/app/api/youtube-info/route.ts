@@ -35,11 +35,11 @@ export async function POST(request: NextRequest) {
         // Obter informações básicas do vídeo usando oembed (sempre funciona)
         const oembedUrl = `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`;
         const oembedResponse = await fetch(oembedUrl);
-        
+
         if (!oembedResponse.ok) {
             return NextResponse.json({ error: 'Vídeo não encontrado' }, { status: 404 });
         }
-        
+
         const oembedData = await oembedResponse.json();
 
         // Tentar obter mais informações fazendo uma requisição à página do YouTube
@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
 
             if (pageResponse.ok) {
                 const pageHtml = await pageResponse.text();
-                
+
                 // Extrair informações adicionais do HTML (duração, descrição, etc.)
                 const durationMatch = pageHtml.match(/"lengthSeconds":"(\d+)"/);
                 const duration = durationMatch ? durationMatch[1] : '0';

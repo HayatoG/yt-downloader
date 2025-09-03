@@ -342,7 +342,7 @@ export default function Home() {
   const processVideoClientSide = async (videoUrl: string) => {
     try {
       console.log('Tentando processamento client-side para:', videoUrl);
-      
+
       // Extrair video ID da URL
       const videoId = extractVideoId(videoUrl);
       if (!videoId) {
@@ -359,7 +359,7 @@ export default function Home() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           url: videoUrl,
           userAgent: userAgent,
           cookies: cookies
@@ -463,37 +463,44 @@ export default function Home() {
 
       console.log(`Iniciando download de ${format.quality} (${format.container})`);
 
-      // Primeiro tentar download direto (funciona melhor para alguns formatos)
-      try {
+      // Se a URL apontar para uma página do YouTube (watch/embed) ou não parecer
+      // conter uma extensão de mídia, usar o proxy para iniciar o download e
+      // evitar navegar para o youtube.com.
+      const isYoutubePage = /(?:youtube\.com\/watch|youtu\.be\/|youtube\.com\/embed\/)/i.test(format.downloadUrl);
+      const hasMediaExtension = /\.(mp4|webm|m4a|mp3|ogg|opus)(?:\?|$)/i.test(format.downloadUrl);
+
+      const shouldUseProxy = isYoutubePage || !hasMediaExtension;
+
+      if (shouldUseProxy) {
+        const proxyUrl = `/api/proxy?url=${encodeURIComponent(format.downloadUrl)}`;
+
+        const link = document.createElement('a');
+        link.href = proxyUrl;
+        link.download = fileName;
+        // Não abrir em nova aba para downloads via proxy; força download
+        link.rel = 'noopener noreferrer';
+        link.style.display = 'none';
+
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        console.log(`Download via proxy iniciado para ${format.quality}`);
+
+      } else {
+        // Caso a URL seja um link direto para um arquivo, usar o método direto
         const link = document.createElement('a');
         link.href = format.downloadUrl;
         link.download = fileName;
         link.target = '_blank';
         link.rel = 'noopener noreferrer';
-        link.style.display = 'none'; // Teste
+        link.style.display = 'none';
 
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
 
         console.log(`Download direto iniciado para ${format.quality}`);
-
-      } catch (directError) {
-        console.log(`Download direto falhou para ${format.quality}, tentando via proxy:`, directError);
-
-        // Fallback: usar proxy para formatos que precisam
-        const proxyUrl = `/api/proxy?url=${encodeURIComponent(format.downloadUrl)}`;
-
-        const link = document.createElement('a');
-        link.href = proxyUrl;
-        link.download = fileName;
-        link.target = '_blank';
-        link.rel = 'noopener noreferrer';
-        link.style.display = 'none'; document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-
-        console.log(`Download via proxy iniciado para ${format.quality}`);
       }
 
     } catch (error) {
@@ -507,7 +514,7 @@ export default function Home() {
           newSet.delete(formatKey);
           return newSet;
         });
-      }, 3000); // Aumentei para dar tempo do download iniciar
+      }, 3000);
     }
   };  // Função para baixar vídeo + áudio separadamente
   const handleDownloadVideoAndAudio = async (videoFormat: VideoFormat) => {
@@ -611,7 +618,7 @@ export default function Home() {
                 )}
               </button>
             </form>
-            
+
             {/* Explicação da tecnologia */}
             <div className="mt-6 bg-blue-500/20 backdrop-blur border border-blue-500/50 text-blue-100 rounded-2xl p-4">
               <div className="flex items-center space-x-3">
